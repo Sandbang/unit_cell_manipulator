@@ -24,11 +24,13 @@ impl UnitCell {
         }
     }
     pub fn vol(&mut self) -> f32{
-        self.vec1.dot(&(self.vec2.cross(&self.vec3)))
+        self.vec1.dot(&(self.vec3.cross(&self.vec2)))
     }
     pub fn extend(&mut self, a: i32, b: i32, c: i32){
 
-        // For first extension dimension
+        self.vec1 *= a as f32;
+        self.vec2 *= a as f32;
+        self.vec3 *= a as f32;
         for i in 1..a{
             for j in 0..self.base_atom_count{
                 let new_atom = Atom{
@@ -38,7 +40,6 @@ impl UnitCell {
                 self.atoms.push(new_atom);
             }
         }
-        // For second extension dimension
         for i in 1..b{
             for j in 0..self.base_atom_count{
                 let new_atom = Atom{
@@ -48,7 +49,6 @@ impl UnitCell {
                 self.atoms.push(new_atom);
             }
         }
-        // For third extension dimension
         for i in 1..c{
             for j in 0..self.base_atom_count{
                 let new_atom = Atom{
@@ -59,6 +59,7 @@ impl UnitCell {
             }
         }
     }
+
     pub fn rotate(&mut self, direction: char, angle: f32){
         let mut axisangle: Vector3<f32> = Vector3::x();
         match direction {
@@ -76,9 +77,46 @@ impl UnitCell {
             self.atoms[i].position = rotation * self.atoms[i].position;
         }
     }
-    
     pub fn morph(&mut self, a: Vector3<f32>, b: Vector3<f32>, c: Vector3<f32>) {
-
+        let inverse = Matrix3::from_columns(&[a, b, c]).transpose().try_inverse().unwrap(); //remove unwrap later
+        let mut counter = 0;
+        self.extend(3, 3, 3);
+        for i in 0..self.atoms.len(){
+            let solution = inverse * self.atoms[i-counter].position;
+            if (solution[0] >= 1.0) | (solution[1] >= 1.0) | (solution[2] >= 1.0){ 
+                self.atoms.remove(i-counter);
+                counter += 1;
+            }
+        }
+        self.vec1 = a;
+        self.vec2 = b;
+        self.vec2 = c;
     }
 
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_extend_rotate(){
+        let se: Atom = Atom{position: Vector3::new(0.0, 0.0, 0.0), number: 34 };
+        let cu0: Atom = Atom{position: Vector3::new(0.25, 0.25, 0.25), number: 29 };
+        let cu1: Atom = Atom{position: Vector3::new(0.75, 0.75, 0.75), number: 29 };
+        let unitcell = &mut UnitCell{
+            vec1: Vector3::new(0.5,0.5,0.0),
+            vec2: Vector3::new(0.5,0.0,0.5),
+            vec3: Vector3::new(0.0,0.5,0.5),
+            atoms: vec!(se, cu0, cu1),
+            base_atom_count: 2,
+            basis: false,
+        };
+        unitcell.extend(1,1,1);
+        unitcell.rotate('z', std::f32::consts::FRAC_PI_4);
+        unitcell.rotate('x', (2.0 as f32).sqrt().atan());
+        assert!(Matrix3::from_columns(&[unitcell.vec1, unitcell.vec2, unitcell.vec3]).transpose() == Matrix3::from_columns(&[
+            Vector3::new(0.0, 1.0/(6.0 as f32).sqrt(), 1.0/(3.0 as f32).sqrt()), 
+            Vector3::new(1.0/(8.0 as f32).sqrt(), -1.0/(24.0 as f32).sqrt(), 1.0/(3.0 as f32).sqrt()), 
+            Vector3::new(-1.0/(8.0 as f32).sqrt(), -1.0/(24.0 as f32).sqrt(), 1.0/(3.0 as f32).sqrt()), 
+            ]).transpose());
+    }
 }
